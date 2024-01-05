@@ -1,0 +1,15 @@
+{
+    "node-apis": {
+        "algorand": {
+            "address": "https://testnet-api.algonode.cloud",
+            "token": "..."
+          },
+          "voi": {
+            "address": "https://testnet-api.voi.nodly.io",
+            "token": "..."
+          }
+    },
+    "pkeys": {
+      "MINE": "words"
+    }
+  }
