@@ -19,6 +19,6 @@ node index.js
 
 `node index.js`
 
-### Close collection
+### Clone collection
 
 `node collection-clone.js algowalk JNXV7QIALNNZ245JJVGI4ILNEYTLMBWTQEWGF3JP7EQ3DMLXJHYVBV3UG4`
