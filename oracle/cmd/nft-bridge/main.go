@@ -2,18 +2,16 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"nft-bridge/internal/algodapi"
 	"nft-bridge/internal/config"
+	"nft-bridge/internal/indexerapi"
+	workers "nft-bridge/internal/workers/algorand"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	"github.com/algorand/go-algorand-sdk/crypto"
-	"github.com/algorand/go-algorand-sdk/mnemonic"
-	"github.com/algorand/go-algorand-sdk/v2/client/v2/algod"
-	"github.com/algorand/go-algorand-sdk/v2/types"
+	"github.com/algorand/go-algorand-sdk/v2/crypto"
+	"github.com/algorand/go-algorand-sdk/v2/mnemonic"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -56,70 +54,50 @@ func main() {
 	}
 
 	// // Initialize the Indexer client for Algorand
-	// indexerClient, err := indexerapi.Make(ctx, &cfg.Algorand.Indexer, slog)
-	// if err != nil {
-	// 	log.WithError(err).Error("Failed to make Algorand indexer client")
-	// 	return
-	// }
+	indexerClient, err := indexerapi.Make(ctx, &cfg.ChainAPIs.Algorand.Indexer, slog)
+	if err != nil {
+		log.WithError(err).Error("Failed to make Algorand indexer client")
+		return
+	}
 
 	// Convert the mnemonic to a private key
-	mnemonicKey := cfg.PKeys.Algorand
-	privateKey, err := mnemonic.ToPrivateKey(mnemonicKey)
+	algorandMnemonicKey := cfg.PKeys.Algorand
+	algorandPrivateKey, err := mnemonic.ToPrivateKey(algorandMnemonicKey)
 	if err != nil {
 		log.WithError(err).Error("Failed to convert mnemonic to private key")
 		return
 	}
 
 	// Derive address from the Algorand private key (pkey)
-	account, err := crypto.AccountFromPrivateKey(privateKey)
+	algoAccount, err := crypto.AccountFromPrivateKey(algorandPrivateKey)
 	if err != nil {
 		log.WithError(err).Error("Failed to derive account from private key")
 		return
 	}
 
-	// Define the specific wallet address to monitor
-	walletAddress := account.Address.String()
+	// Convert the mnemonic to a private key
+	voiMnemonicKey := cfg.PKeys.Algorand
+	voiPrivateKey, err := mnemonic.ToPrivateKey(voiMnemonicKey)
+	if err != nil {
+		log.WithError(err).Error("Failed to convert mnemonic to private key")
+		return
+	}
 
-	// Start the monitoring process in a new goroutine
-	go monitorTransactions(ctx, algoClient, walletAddress)
+	// Derive address from the Voi private key (pkey)
+	voiAccount, err := crypto.AccountFromPrivateKey(voiPrivateKey)
+	if err != nil {
+		log.WithError(err).Error("Failed to derive account from private key")
+		return
+	}
+
+	algoBridge := workers.NewAlgoBridge(algoClient, indexerClient, algoAccount, voiAccount)
+
+	// Start the Worker to Monitor the Transactions
+	go algoBridge.StartMonitoring(ctx)
+
+	// Start Processing the Transactions
+	go algoBridge.StartProcessing(ctx)
 
 	// Keep the main goroutine alive
 	select {}
-}
-
-// monitorTransactions continuously checks for transactions to the specified wallet.
-func monitorTransactions(ctx context.Context, api *algodapi.AlgodAPI, address string) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			// Fetch account information
-			accountInfo, err := api.GetAccountInfo(ctx, address)
-			if err != nil {
-				log.WithError(err).Error("Failed to get account information")
-				// Decide how you want to handle the error. Maybe continue with a delay?
-				time.Sleep(10 * time.Second)
-				continue
-			}
-
-			log.Infof("Monitoring transactions for account: %+v", accountInfo)
-
-			// Implement the logic to fetch and check transactions
-			// Example: transactions, err := api.Client.PendingTransactionsByAddress(address).Do(ctx)
-			// You'll need to filter transactions for a payment with a note indicating the asset to opt-in
-
-			// Handle the found transaction and opt-in to the asset
-			// Example: if transactionFound { optInToAsset(api.Client, transaction) }
-
-			// Sleep for a short duration before checking again
-			time.Sleep(10 * time.Second)
-		}
-	}
-}
-
-// optInToAsset handles the opt-in process for the specified asset
-func optInToAsset(client *algod.Client, transaction types.Transaction) {
-	// Implement the asset opt-in logic here
-	fmt.Println("Opting in to asset:", transaction.Note)
 }
