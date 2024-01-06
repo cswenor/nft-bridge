@@ -3,6 +3,7 @@ module nft-bridge
 go 1.21.5
 
 require (
+	github.com/algorand/go-algorand-sdk v1.24.0
 	github.com/algorand/go-algorand-sdk/v2 v2.4.0
 	github.com/algorand/go-codec/codec v1.1.10
 	github.com/sirupsen/logrus v1.9.3

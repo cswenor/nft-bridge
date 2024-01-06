@@ -1,15 +1,32 @@
 {
-    "node-apis": {
+    "chain-apis": {
         "algorand": {
-            "address": "https://testnet-api.algonode.cloud",
-            "token": "..."
-          },
-          "voi": {
-            "address": "https://testnet-api.voi.nodly.io",
-            "token": "..."
-          }
+            "algod": {
+                "address": "https://testnet-api.algonode.cloud",
+                "port": "",
+                "token": "..."
+            },
+            "indexer": {
+                "address": "https://testnet-idx.algonode.cloud",
+                "port": "",
+                "token": "..."
+            }
+        },
+        "voi": {
+            "algod": {
+                "address": "https://testnet-api.voi.nodly.io",
+                "port": "",
+                "token": "..."
+            },
+            "indexer": {
+                "address": "https://testnet-idx.voi.nodly.io",
+                "port": "",
+                "token": "..."
+            }
+        }
     },
     "pkeys": {
-      "MINE": "words"
+        "algorand": "words",
+        "voi": "words"
     }
-  }
+}

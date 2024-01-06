@@ -1,18 +1,3 @@
-// Copyright (C) 2022 AlgoNode Org.
-//
-// voibot is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as
-// published by the Free Software Foundation, either version 3 of the
-// License, or (at your option) any later version.
-//
-// voibot is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with voibot.  If not, see <https://www.gnu.org/licenses/>.
-
 package config
 
 import (
@@ -23,27 +8,30 @@ import (
 
 var cfgFile = flag.String("f", "config.jsonc", "config file")
 
-type NodeConfig struct {
+type ServiceConfig struct {
 	Address string `json:"address"`
+	Port    string `json:"port"`
 	Token   string `json:"token"`
 }
 
-type MINEConfig struct {
-	Threads        int    `json:"threads"`
-	Rate           int    `json:"rate"`
-	DepositAddress string `json:"depositAddress"`
-	Abi            string `json:"abi"`
-	AppId          string `json:"appId"`
+type ChainConfig struct {
+	Algod   ServiceConfig `json:"algod"`
+	Indexer ServiceConfig `json:"indexer"`
 }
 
-type KV map[string]string
-type KB map[string]bool
+type PKeys struct {
+	Algorand string `json:"algorand"`
+	Voi      string `json:"voi"`
+}
+
+type Chains struct {
+	Algorand ChainConfig `json:"algorand"`
+	Voi      ChainConfig `json:"voi"`
+}
 
 type BotConfig struct {
-	Algod  *NodeConfig `json:"algod-api"`
-	MINE   *MINEConfig `json:"mine"`
-	PKeys  KV          `json:"pkeys"`
-	WSnglt KB          `json:"singletons"`
+	ChainAPIs Chains `json:"chain-apis"`
+	PKeys     PKeys  `json:"pkeys"`
 }
 
 var defaultConfig = BotConfig{}
@@ -54,16 +42,29 @@ func LoadConfig() (cfg BotConfig, err error) {
 	cfg = defaultConfig
 	err = utils.LoadJSONCFromFile(*cfgFile, &cfg)
 
-	if cfg.Algod == nil {
-		return cfg, fmt.Errorf("[CFG] Missing algod-api config")
+	// Check for Algorand and Voi configurations
+	if cfg.ChainAPIs.Algorand.Algod.Address == "" || cfg.ChainAPIs.Algorand.Algod.Token == "" {
+		return cfg, fmt.Errorf("[CFG] Incomplete Algorand Algod config")
 	}
 
-	if cfg.PKeys == nil {
-		return cfg, fmt.Errorf("[CFG] Missing pkeys config")
+	if cfg.ChainAPIs.Algorand.Indexer.Address == "" || cfg.ChainAPIs.Algorand.Indexer.Token == "" {
+		return cfg, fmt.Errorf("[CFG] Incomplete Algorand Indexer config")
 	}
 
-	if cfg.WSnglt == nil || len(cfg.WSnglt) == 0 {
-		return cfg, fmt.Errorf("[CFG] Singleton config missing")
+	if cfg.ChainAPIs.Voi.Algod.Address == "" || cfg.ChainAPIs.Voi.Algod.Token == "" {
+		return cfg, fmt.Errorf("[CFG] Incomplete Voi Algod config")
+	}
+
+	if cfg.ChainAPIs.Voi.Indexer.Address == "" || cfg.ChainAPIs.Voi.Indexer.Token == "" {
+		return cfg, fmt.Errorf("[CFG] Incomplete Voi Indexer config")
+	}
+
+	// Check for specific private keys
+	if cfg.PKeys.Algorand == "" {
+		return cfg, fmt.Errorf("[CFG] Missing 'algorand' private key in pkeys config")
+	}
+	if cfg.PKeys.Voi == "" {
+		return cfg, fmt.Errorf("[CFG] Missing 'voi' private key in pkeys config")
 	}
 
 	return cfg, err
