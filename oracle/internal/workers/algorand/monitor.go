@@ -14,13 +14,13 @@ import (
 )
 
 type noteObj struct {
-	AssetID int64         `json:"assetId"`
+	AssetID uint64        `json:"assetId"`
 	To      types.Address `json:"to"`
 	Amount  int64         `json:"amount"`
 }
 
 type rawNoteObj struct {
-	AssetID int64  `json:"assetId"`
+	AssetID uint64 `json:"assetId"`
 	To      string `json:"to"`
 	Amount  int64  `json:"amount"`
 }
@@ -43,7 +43,6 @@ func (b *AlgoBridge) fetchAndStoreTransactions(ctx context.Context) {
 	// Use the lastKnownRound to fetch only new transactions
 	txns, err := b.indexerClient.Client.SearchForTransactions().
 		AddressString(b.algoAccount.Address.String()).
-		TxType("pay").
 		MinRound(b.lastKnownRound + 1).
 		Do(ctx)
 
@@ -80,16 +79,28 @@ func (b *AlgoBridge) fetchAndStoreTransactions(ctx context.Context) {
 }
 
 func (b *AlgoBridge) parseAndFilterTransaction(txn models.Transaction) error {
-	// 1. Check if it's a payment transaction
-	if txn.Type != "pay" {
-		return errors.New("not a payment transaction")
+	// 1. Check if it's a payment or asset transfer transaction
+	if txn.Type != "pay" && txn.Type != "axfer" {
+		return fmt.Errorf("unsupported transaction type: %s", txn.Type)
+	}
+
+	// Initialize variables to hold transaction details
+	var amount uint64
+
+	// 2. Extract details based on transaction type
+	if txn.Type == "pay" {
+		// It's a payment transaction
+		amount = txn.PaymentTransaction.Amount
+	} else if txn.Type == "axfer" {
+		// It's an asset transfer transaction
+		amount = txn.AssetTransferTransaction.Amount
 	}
 
 	// 2. Check if it has a minimum of .2 Algo as payment
 	minAmount := big.NewInt(200000) // .2 Algo in microAlgos
-	amount := big.NewInt(0).SetUint64(txn.PaymentTransaction.Amount)
-	if amount.Cmp(minAmount) == -1 {
-		return errors.New("transaction amount is less than the minimum required")
+	amountBig := big.NewInt(0).SetUint64(amount)
+	if (txn.Type == "pay" && amountBig.Cmp(minAmount) == -1) || (txn.Type == "axfer" && amount == 0) {
+		return errors.New("transaction amount is less than the minimum required or zero for asset transfer")
 	}
 
 	// 3. Check if it has a Note

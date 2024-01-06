@@ -17,7 +17,7 @@ type AlgoBridge struct {
 	algoAccount    crypto.Account
 	voiAccount     crypto.Account
 	lastKnownRound uint64
-	nftStore       map[string]BridgedNFT
+	nftStore       map[uint64]BridgedNFT
 	TxnChannel     chan models.Transaction
 	mu             sync.Mutex // Mutex to protect lastKnownRound
 }
@@ -30,8 +30,14 @@ func NewAlgoBridge(algodClient *algodapi.AlgodAPI, indexerClient *indexerapi.Ind
 		voiAccount:     voiAccount,
 		lastKnownRound: 0,
 		TxnChannel:     make(chan models.Transaction, 1000),
-		nftStore:       make(map[string]BridgedNFT),
+		nftStore:       make(map[uint64]BridgedNFT),
 	}
+}
+
+func (b *AlgoBridge) updateNFTStore(nft *BridgedNFT) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.nftStore[nft.AssetID] = *nft
 }
 
 type ChainType string
@@ -67,7 +73,7 @@ type BridgedNFT struct {
 	ChainOfOrigin ChainType          // Chain of origin for the NFT
 	State         StateType          // Current state of the NFT in the bridge process
 	To            types.Address      // Algorand address to which the NFT will be sent
-	ID            string             // Unique identifier for the NFT
+	AssetID       uint64             // Unique identifier for the NFT
 	Sender        string             // String representing from where the NFT is coming
 	Transaction   models.Transaction // Original transaction
 	Spec          SpecType           // The specification of the NFT (ARC3, ARC69, etc.)
@@ -75,7 +81,7 @@ type BridgedNFT struct {
 }
 
 // NewBridgedNFT creates a new BridgedNFT instance with validation.
-func NewBridgedNFT(chain ChainType, state StateType, to types.Address, id, sender string) (*BridgedNFT, error) {
+func NewBridgedNFT(chain ChainType, state StateType, to types.Address, id uint64, sender string) (*BridgedNFT, error) {
 	if !chain.IsValid() {
 		return nil, errors.New("invalid chain type")
 	}
@@ -86,7 +92,7 @@ func NewBridgedNFT(chain ChainType, state StateType, to types.Address, id, sende
 		ChainOfOrigin: chain,
 		State:         state,
 		To:            to,
-		ID:            id,
+		AssetID:       id,
 		Sender:        sender,
 	}, nil
 }

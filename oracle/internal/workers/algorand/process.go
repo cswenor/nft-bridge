@@ -29,7 +29,18 @@ func (b *AlgoBridge) StartProcessing(ctx context.Context) {
 }
 
 func (b *AlgoBridge) marshalTransaction(txn models.Transaction) {
-	// 3. Check if it has a Note
+
+	// Check to see if it is an asset transfer and if it is process the NFT
+	if txn.Type == "axfer" && txn.AssetTransferTransaction.Amount > 0 {
+		assetID := txn.AssetTransferTransaction.AssetId
+		// Check if the asset ID exists in the store and process it
+		if nft, exists := b.nftStore[assetID]; exists {
+			b.processNFT(&nft)
+		} else {
+			fmt.Printf("No NFT found for asset ID %d\n", assetID)
+		}
+		return
+	}
 	noteStr := string(txn.Note)
 	var rawNote rawNoteObj
 	if err := json.Unmarshal([]byte(noteStr), &rawNote); err != nil {
@@ -48,11 +59,9 @@ func (b *AlgoBridge) marshalTransaction(txn models.Transaction) {
 	note.AssetID = rawNote.AssetID
 	note.Amount = rawNote.Amount
 
-	assetIDKey := fmt.Sprint(note.AssetID)
-
 	// Assuming note.AssetID is used as the key for nftStore
 	b.mu.Lock() // Ensure thread-safe access to nftStore
-	if existingNFT, exists := b.nftStore[assetIDKey]; exists {
+	if existingNFT, exists := b.nftStore[note.AssetID]; exists {
 		// If an NFT with this AssetID already exists, report its state and error out
 		// Assuming the list always has at least one element if it exists
 		b.mu.Unlock()
@@ -82,10 +91,10 @@ func (b *AlgoBridge) marshalTransaction(txn models.Transaction) {
 
 	// Create a BridgedNFT object with the parsed note information
 	bridgedNFT, err := NewBridgedNFT(
-		Algorand,                 // Assuming the ChainOfOrigin is always Algorand for this use case
-		Expect,                   // Assuming the initial State is always Expect
-		note.To,                  // The 'To' address from the note
-		fmt.Sprint(note.AssetID), // Using AssetID as a unique identifier
+		Algorand,     // Assuming the ChainOfOrigin is always Algorand for this use case
+		Expect,       // Assuming the initial State is always Expect
+		note.To,      // The 'To' address from the note
+		note.AssetID, // Using AssetID as a unique identifier
 		txn.Sender,
 	)
 	if err != nil {
@@ -104,8 +113,10 @@ func (b *AlgoBridge) marshalTransaction(txn models.Transaction) {
 	// For example, add it to the nftStore (you need to handle concurrency and check for duplicates)
 
 	b.mu.Lock()
-	b.nftStore[assetIDKey] = *bridgedNFT
+	b.nftStore[note.AssetID] = *bridgedNFT
 	b.mu.Unlock()
+
+	b.processNFT(bridgedNFT)
 }
 
 // isARC3 determines if the asset adheres to the ARC3 spec based on the provided rules.
@@ -125,4 +136,49 @@ func isARC3(assetURL, assetName string) bool {
 	// Add any other necessary checks based on the ARC3 specification
 
 	return true
+}
+
+func (b *AlgoBridge) processNFT(nft *BridgedNFT) {
+	// Fetch account information
+	accountInfo, err := b.algodClient.GetAccountInfo(context.Background(), b.algoAccount.Address.String())
+	if err != nil {
+		fmt.Printf("Failed to fetch account information: %s\n", err)
+		return
+	}
+
+	// Check if the account is opted into the asset
+	var optedIn bool
+	var assetBalance uint64
+	for _, asset := range accountInfo.Assets {
+		if asset.AssetId == nft.AssetID {
+			optedIn = true
+			assetBalance = asset.Amount
+			break
+		}
+	}
+
+	// If not opted in, opt into the asset and set state to Prepared
+	if !optedIn {
+		txID, err := b.algodClient.OptIntoAsset(context.Background(), nft.AssetID, b.algoAccount)
+		if err != nil {
+			fmt.Printf("Failed to opt into asset: %s\n", err)
+			return
+		}
+		nft.State = Prepared
+		fmt.Printf("Opted into asset: %v with transaction ID: %v\n", nft.AssetID, txID)
+
+		// Update the NFT in the store
+		b.updateNFTStore(nft)
+		return
+	} else {
+		nft.State = Prepared
+		b.updateNFTStore(nft)
+	}
+
+	// If already opted in and balance >= 1, set state to Received
+	if assetBalance >= 1 {
+		nft.State = Received
+		// Update the NFT in the store
+		b.updateNFTStore(nft)
+	}
 }
