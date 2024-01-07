@@ -45,7 +45,7 @@ console.log("bridgeAddress", bridgeAddress);
 const [algodClient, indexerClient] = getAlgorandClients(node);
 
 const makeBridgeRequestTxn = async (asset, addrTo) => {
-  const transactionFee = 0.101;
+  const transactionFee = 0.201;
   const serviceFee = 0.099;
   const totalFee = transactionFee + serviceFee;
   const req = {
@@ -64,15 +64,16 @@ const makeBridgeRequestTxn = async (asset, addrTo) => {
 
 const main = async () => {
   console.log("Do the thing!");
-  for (const asset of data) {
+  const n = 6;
+  for (const asset of data.slice(n, n + 1)) {
     console.log(`Requesting ${asset.params.name} (${asset.index})`);
     const res = await signSendAndConfirm(
       algodClient,
       [await makeBridgeRequestTxn(asset, addrTo)],
       sk
     );
+    console.log(res);
   }
-  console.log(res);
 };
 
 main();

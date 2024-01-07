@@ -1,0 +1,1 @@
+# Base Arc72 Implementation D (ARC-72D)
