@@ -2,6 +2,7 @@ package workers
 
 import (
 	"errors"
+	"fmt"
 	"nft-bridge/internal/algodapi"
 	"nft-bridge/internal/indexerapi"
 	"sync"
@@ -12,25 +13,29 @@ import (
 )
 
 type AlgoBridge struct {
-	algodClient    *algodapi.AlgodAPI
-	indexerClient  *indexerapi.IndexerAPI
-	algoAccount    crypto.Account
-	voiAccount     crypto.Account
-	lastKnownRound uint64
-	nftStore       map[uint64]BridgedNFT
-	TxnChannel     chan models.Transaction
-	mu             sync.Mutex // Mutex to protect lastKnownRound
+	algoAlgodClient   *algodapi.AlgodAPI
+	algoIndexerClient *indexerapi.IndexerAPI
+	voiAlgodClient    *algodapi.AlgodAPI
+	voiIndexerClient  *indexerapi.IndexerAPI
+	algoAccount       crypto.Account
+	voiAccount        crypto.Account
+	lastKnownRound    uint64
+	nftStore          map[uint64]BridgedNFT
+	TxnChannel        chan models.Transaction
+	mu                sync.Mutex // Mutex to protect lastKnownRound
 }
 
-func NewAlgoBridge(algodClient *algodapi.AlgodAPI, indexerClient *indexerapi.IndexerAPI, algoAccount crypto.Account, voiAccount crypto.Account) *AlgoBridge {
+func NewAlgoBridge(algoAlgodClient *algodapi.AlgodAPI, algoIndexerClient *indexerapi.IndexerAPI, voiAlgodClient *algodapi.AlgodAPI, voiIndexerClient *indexerapi.IndexerAPI, algoAccount crypto.Account, voiAccount crypto.Account) *AlgoBridge {
 	return &AlgoBridge{
-		algodClient:    algodClient,
-		indexerClient:  indexerClient,
-		algoAccount:    algoAccount,
-		voiAccount:     voiAccount,
-		lastKnownRound: 0,
-		TxnChannel:     make(chan models.Transaction, 1000),
-		nftStore:       make(map[uint64]BridgedNFT),
+		algoAlgodClient:   algoAlgodClient,
+		algoIndexerClient: algoIndexerClient,
+		voiAlgodClient:    voiAlgodClient,
+		voiIndexerClient:  voiIndexerClient,
+		algoAccount:       algoAccount,
+		voiAccount:        voiAccount,
+		lastKnownRound:    0,
+		TxnChannel:        make(chan models.Transaction, 1000),
+		nftStore:          make(map[uint64]BridgedNFT),
 	}
 }
 
@@ -38,6 +43,7 @@ func (b *AlgoBridge) updateNFTStore(nft *BridgedNFT) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.nftStore[nft.AssetID] = *nft
+	fmt.Printf("NFT with AssetID %d has been updated to state: %s\n", nft.AssetID, nft.State)
 }
 
 type ChainType string

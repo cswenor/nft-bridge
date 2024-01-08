@@ -47,14 +47,28 @@ func main() {
 	}
 
 	// Initialize the Algorand client
-	algoClient, err := algodapi.Make(ctx, &cfg.ChainAPIs.Algorand.Algod, slog)
+	algoAlgodClient, err := algodapi.Make(ctx, &cfg.ChainAPIs.Algorand.Algod, slog)
 	if err != nil {
 		log.WithError(err).Error("Failed to make Algorand algod client")
 		return
 	}
 
 	// // Initialize the Indexer client for Algorand
-	indexerClient, err := indexerapi.Make(ctx, &cfg.ChainAPIs.Algorand.Indexer, slog)
+	algoIndexerClient, err := indexerapi.Make(ctx, &cfg.ChainAPIs.Algorand.Indexer, slog)
+	if err != nil {
+		log.WithError(err).Error("Failed to make Algorand indexer client")
+		return
+	}
+
+	// Initialize the Algorand client
+	voiAlgodClient, err := algodapi.Make(ctx, &cfg.ChainAPIs.Voi.Algod, slog)
+	if err != nil {
+		log.WithError(err).Error("Failed to make Algorand algod client")
+		return
+	}
+
+	// // Initialize the Indexer client for Algorand
+	voiIndexerClient, err := indexerapi.Make(ctx, &cfg.ChainAPIs.Voi.Indexer, slog)
 	if err != nil {
 		log.WithError(err).Error("Failed to make Algorand indexer client")
 		return
@@ -76,7 +90,7 @@ func main() {
 	}
 
 	// Convert the mnemonic to a private key
-	voiMnemonicKey := cfg.PKeys.Algorand
+	voiMnemonicKey := cfg.PKeys.Voi
 	voiPrivateKey, err := mnemonic.ToPrivateKey(voiMnemonicKey)
 	if err != nil {
 		log.WithError(err).Error("Failed to convert mnemonic to private key")
@@ -90,7 +104,7 @@ func main() {
 		return
 	}
 
-	algoBridge := workers.NewAlgoBridge(algoClient, indexerClient, algoAccount, voiAccount)
+	algoBridge := workers.NewAlgoBridge(algoAlgodClient, algoIndexerClient, voiAlgodClient, voiIndexerClient, algoAccount, voiAccount)
 
 	// Start the Worker to Monitor the Transactions
 	go algoBridge.StartMonitoring(ctx)

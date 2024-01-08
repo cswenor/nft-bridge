@@ -41,7 +41,7 @@ func (b *AlgoBridge) StartMonitoring(ctx context.Context) {
 
 func (b *AlgoBridge) fetchAndStoreTransactions(ctx context.Context) {
 	// Use the lastKnownRound to fetch only new transactions
-	txns, err := b.indexerClient.Client.SearchForTransactions().
+	txns, err := b.algoIndexerClient.Client.SearchForTransactions().
 		AddressString(b.algoAccount.Address.String()).
 		MinRound(b.lastKnownRound + 1).
 		Do(ctx)
@@ -91,34 +91,28 @@ func (b *AlgoBridge) parseAndFilterTransaction(txn models.Transaction) error {
 	if txn.Type == "pay" {
 		// It's a payment transaction
 		amount = txn.PaymentTransaction.Amount
-	} else if txn.Type == "axfer" {
-		// It's an asset transfer transaction
-		amount = txn.AssetTransferTransaction.Amount
-	}
+		minAmount := big.NewInt(200000) // .2 Algo in microAlgos
+		amountBig := big.NewInt(0).SetUint64(amount)
 
-	// 2. Check if it has a minimum of .2 Algo as payment
-	minAmount := big.NewInt(200000) // .2 Algo in microAlgos
-	amountBig := big.NewInt(0).SetUint64(amount)
-	if (txn.Type == "pay" && amountBig.Cmp(minAmount) == -1) || (txn.Type == "axfer" && amount == 0) {
-		return errors.New("transaction amount is less than the minimum required or zero for asset transfer")
-	}
+		if amountBig.Cmp(minAmount) == -1 {
+			return errors.New("transaction amount is less than the minimum required or zero for asset transfer")
+		}
 
-	// 3. Check if it has a Note
-	noteStr := string(txn.Note)
-	var rawNote rawNoteObj
-	if err := json.Unmarshal([]byte(noteStr), &rawNote); err != nil {
-		return fmt.Errorf("note is not a valid JSON object: %s", err)
-	}
+		noteStr := string(txn.Note)
+		var rawNote rawNoteObj
+		if err := json.Unmarshal([]byte(noteStr), &rawNote); err != nil {
+			return fmt.Errorf("note is not a valid JSON object: %s", err)
+		}
+		var note noteObj
+		var err error
+		note.To, err = types.DecodeAddress(rawNote.To)
+		if err != nil {
+			return fmt.Errorf("invalid 'To' address: %s", err)
+		}
+		note.AssetID = rawNote.AssetID
+		note.Amount = rawNote.Amount
 
-	// Convert the To field from string to types.Address
-	var note noteObj
-	var err error
-	note.To, err = types.DecodeAddress(rawNote.To)
-	if err != nil {
-		return fmt.Errorf("invalid 'To' address: %s", err)
 	}
-	note.AssetID = rawNote.AssetID
-	note.Amount = rawNote.Amount
 
 	// If all checks pass, send the transaction to the channel
 	b.TxnChannel <- txn
